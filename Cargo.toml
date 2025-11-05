@@ -6,7 +6,7 @@ description = "A Rust library for implementing SLAM systems"
 repository = "https://github.com/mostlykiguess/slam-rs"
 license = "MIT"
 readme = "README.md"
-keywords = ["slam", "rust", "computer vision", "visual slam"]
+keywords = ["slam", "rust", "computer-vision", "visual-slam"]
 categories = ["computer-vision","robotics"]
 
 [dependencies]
