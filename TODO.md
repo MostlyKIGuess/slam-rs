@@ -5,9 +5,12 @@
 - [x] Read video frames from file
 - [x] Convert frames to grayscale
 - [x] Detect ORB features
-- [x] Create OrbDetector wrapper in lib.rs
+- [x] Create OrbDetector wrapper (modularized in src/feature/)
 - [x] Write basic tests for feature detection
-- [ ] Match features between frames
+- [x] Match features between frames
+- [x] Create FeatureMatcher with BFMatcher
+- [x] Filter matches by distance
+- [x] Create visualizer example
 - [ ] Compute essential matrix
 - [ ] Recover pose (R, t)
 - [ ] Build transformation matrix
@@ -20,3 +23,20 @@
 - [ ] Write tests
 - [ ] Document code
 - [ ] Test on KITTI dataset
+
+## How to Run
+
+**Run the visualizer:**
+```bash
+cargo run --example visualize_features /path/to/video.mp4
+```
+
+**Run tests:**
+```bash
+cargo test
+```
+
+**Run main:**
+```bash
+cargo run -- /path/to/video.mp4
+```
