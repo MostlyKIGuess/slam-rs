@@ -7,7 +7,7 @@ repository = "https://github.com/mostlykiguess/slam-rs"
 license = "MIT"
 readme = "README.md"
 keywords = ["slam", "rust", "computer-vision", "visual-slam"]
-categories = ["computer-vision","robotics"]
+categories = ["computer-vision", "science::robotics"]
 
 [dependencies]
 opencv = "0.97.1"
