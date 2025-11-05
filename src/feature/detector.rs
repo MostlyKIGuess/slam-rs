@@ -11,7 +11,7 @@ pub struct OrbDetector {
 }
 
 impl OrbDetector {
-    /// new ORB detector with specified max features
+    /// Create a new ORB detector with specified max features
     pub fn new(max_features: i32) -> Result<Self, Box<dyn std::error::Error>> {
         let orb = ORB::create_def()?;
         Ok(Self { orb, max_features })

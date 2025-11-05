@@ -11,6 +11,7 @@ pub struct FeatureMatcher {
 }
 
 impl FeatureMatcher {
+    /// Create a new feature matcher using Brute Force
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let matcher = BFMatcher::create(
             opencv::core::NORM_HAMMING,
