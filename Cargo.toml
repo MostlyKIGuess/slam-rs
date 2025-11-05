@@ -1,0 +1,11 @@
+[package]
+name = "slam-rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+opencv = "0.97.1"
+nalgebra = "0.34.1"
+bevy = "0.17.2"
+serde = "1.0.228"
+serde_json = "1.0.145"

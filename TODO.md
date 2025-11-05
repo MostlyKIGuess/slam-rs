@@ -1,0 +1,22 @@
+# TODO
+
+- [x] Setup project structure
+- [x] Add dependencies (OpenCV, nalgebra, bevy, serde)
+- [x] Read video frames from file
+- [x] Convert frames to grayscale
+- [x] Detect ORB features
+- [x] Create OrbDetector wrapper in lib.rs
+- [x] Write basic tests for feature detection
+- [ ] Match features between frames
+- [ ] Compute essential matrix
+- [ ] Recover pose (R, t)
+- [ ] Build transformation matrix
+- [ ] Update global pose
+- [ ] Track trajectory
+- [ ] Save trajectory to JSON
+- [ ] Add 3D visualization
+- [ ] Add CLI arguments
+- [ ] Handle errors gracefully
+- [ ] Write tests
+- [ ] Document code
+- [ ] Test on KITTI dataset
