@@ -1,5 +1,9 @@
 /target
 test.mp4
 *.mp4
+# my local works I dont' want to push
 trajectory_output.json
+point_cloud.json
+point_cloud.ply
 fakeahhreadme.md
+mapping_work.md

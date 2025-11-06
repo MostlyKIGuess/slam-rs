@@ -4,12 +4,13 @@ use opencv::{
     prelude::*,
     videoio::{self, VideoCapture, VideoCaptureTrait},
 };
-use slamkit_rs::{CameraIntrinsics, FeatureMatcher, OrbDetector, PoseEstimator, Trajectory};
+use slamkit_rs::{
+    CameraIntrinsics, FeatureMatcher, KeyframeSelector, OrbDetector, PoseEstimator, Trajectory,
+};
 use std::time::Instant;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Visual Odometry Pipeline");
-    println!("========================\n");
 
     let args: Vec<String> = std::env::args().collect();
 
@@ -57,6 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut matcher = FeatureMatcher::new()?;
     let pose_estimator = PoseEstimator::new(intrinsics);
     let mut trajectory = Trajectory::new();
+    let mut keyframe_selector = KeyframeSelector::new();
 
     highgui::named_window("Video", highgui::WINDOW_AUTOSIZE)?;
     highgui::named_window("Matches", highgui::WINDOW_AUTOSIZE)?;
@@ -70,6 +72,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut frame_count = 0;
     let mut successful_frames = 0;
     let mut failed_frames = 0;
+    let mut keyframe_count = 0;
 
     let start_time = Instant::now();
     let mut fps_timer = Instant::now();
@@ -113,21 +116,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Ok(essential) => {
                         match pose_estimator.recover_pose(&essential, &points1, &points2) {
                             Ok((rotation, translation)) => {
-                                // Update trajectory
-                                let timestamp = (frame_count - 1) as f64 / fps;
-                                trajectory.update(&rotation, &translation, frame_count, timestamp);
+                                // Check if this should be a keyframe
+                                let is_keyframe = keyframe_selector.should_be_keyframe(
+                                    &rotation,
+                                    &translation,
+                                    good_matches.len(),
+                                );
+
+                                if is_keyframe {
+                                    keyframe_count += 1;
+                                    // Update trajectory only on keyframes
+                                    let timestamp = (frame_count - 1) as f64 / fps;
+                                    trajectory.update(
+                                        &rotation,
+                                        &translation,
+                                        frame_count,
+                                        timestamp,
+                                    );
+                                }
+
                                 successful_frames += 1;
 
                                 // Print progress
                                 if frame_count % 30 == 0 {
                                     println!(
-                                        "Frame {:4} | Matches: {:3} | Distance: {:.2}m | Success rate: {:.1}%",
+                                        "Frame {:4} | Matches: {:3} | Keyframes: {:3} | Distance: {:.2}m",
                                         frame_count,
                                         good_matches.len(),
+                                        keyframe_count,
                                         trajectory.total_distance(),
-                                        (successful_frames as f64
-                                            / (successful_frames + failed_frames) as f64)
-                                            * 100.0
                                     );
                                 }
                             }
@@ -174,9 +191,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         draw_text(&mut display, &info, Point::new(10, 30))?;
 
         let traj_info = format!(
-            "Distance: {:.2}m | Points: {}",
-            trajectory.total_distance(),
-            trajectory.len()
+            "Keyframes: {} | Distance: {:.2}m",
+            keyframe_count,
+            trajectory.total_distance()
         );
         draw_text(&mut display, &traj_info, Point::new(10, 60))?;
 
@@ -208,9 +225,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Total frames: {}", frame_count);
     println!("Successful poses: {}", successful_frames);
     println!("Failed poses: {}", failed_frames);
+    println!("Keyframes selected: {}", keyframe_count);
     println!(
-        "Success rate: {:.1}%",
-        (successful_frames as f64 / (successful_frames + failed_frames) as f64) * 100.0
+        "Keyframe ratio: {:.1}%",
+        (keyframe_count as f64 / frame_count as f64) * 100.0
     );
     println!("Total distance: {:.2}m", trajectory.total_distance());
     println!("Total time: {:.2}s", elapsed.as_secs_f64());

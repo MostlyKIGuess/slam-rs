@@ -73,6 +73,24 @@ impl Trajectory {
         &self.global_pose
     }
 
+    /// Get current rotation and translation as a tuple
+    pub fn current_pose_rt(&self) -> (na::Matrix3<f64>, na::Vector3<f64>) {
+        let mut rotation = na::Matrix3::zeros();
+        for i in 0..3 {
+            for j in 0..3 {
+                rotation[(i, j)] = self.global_pose[(i, j)];
+            }
+        }
+
+        let translation = na::Vector3::new(
+            self.global_pose[(0, 3)],
+            self.global_pose[(1, 3)],
+            self.global_pose[(2, 3)],
+        );
+
+        (rotation, translation)
+    }
+
     /// Get all trajectory points
     pub fn points(&self) -> &[TrajectoryPoint] {
         &self.points
