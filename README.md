@@ -21,7 +21,11 @@ cargo build --release
 Run visual odometry example:
 
 ```
-cargo run --example visual_odometry -- test.mp4
+# Use default KITTI intrinsics
+cargo run --example visual_odometry /path/to/video.mp4
+
+# Specify custom camera intrinsics
+cargo run --example visual_odometry /path/to/video.mp4 -- --fx 500 --fy 500 --cx 320 --cy 240
 ```
 
 ## Modules
