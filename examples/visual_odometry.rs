@@ -4,7 +4,7 @@ use opencv::{
     prelude::*,
     videoio::{self, VideoCapture, VideoCaptureTrait},
 };
-use slam_rs::{CameraIntrinsics, FeatureMatcher, OrbDetector, PoseEstimator, Trajectory};
+use slamkit_rs::{CameraIntrinsics, FeatureMatcher, OrbDetector, PoseEstimator, Trajectory};
 use std::time::Instant;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

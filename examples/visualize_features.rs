@@ -4,7 +4,7 @@ use opencv::{
     prelude::*,
     videoio::{self, VideoCapture, VideoCaptureTrait},
 };
-use slam_rs::{FeatureMatcher, OrbDetector};
+use slamkit_rs::{FeatureMatcher, OrbDetector};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Feature Matching Visualizer\n");
