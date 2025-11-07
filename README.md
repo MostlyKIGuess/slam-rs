@@ -9,6 +9,7 @@ Trying to implement a SLAM system in Rust.
 - [nalgebra](https://crates.io/crates/nalgebra)
 - [serde](https://crates.io/crates/serde)
 - [rerun](https://crates.io/crates/rerun) (optional, for 3D visualization)
+- [Clap](https://crates.io/crates/clap) (for command-line argument parsing)
 
 ## Usage
 
@@ -46,16 +47,6 @@ Run feature detection visualization:
 ```bash
 cargo run --example visualize_features /path/to/video.mp4
 ```
-
-## Why is the map sparse?
-
-This is a **feature-based** system using ORB features (~1000-2000 per frame). We only triangulate at corner-like features, not every pixel. This is similar to ORB-SLAM.
-
-For **dense reconstruction**, you need:
-- Dense/semi-dense tracking (all high-gradient pixels)
-- Depth estimation/fusion
-- More computational resources
-
 
 ## Modules
 
