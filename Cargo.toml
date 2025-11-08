@@ -1,6 +1,6 @@
 [package]
 name = "slamkit-rs"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2024"
 description = "A Rust library for implementing SLAM systems"
 repository = "https://github.com/mostlykiguess/slam-rs"
@@ -16,6 +16,10 @@ serde = "1.0.228"
 serde_json = "1.0.145"
 rerun = { version = "0.26.2", optional = true }
 clap = { version = "4.5.51", features = ["derive"] }
+approx = "0.5.1"
+
+[dev-dependencies]
+rand = "0.8"
 
 [features]
 default = []

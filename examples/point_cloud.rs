@@ -5,8 +5,8 @@ use opencv::{
     videoio::{self, VideoCapture, VideoCaptureTrait},
 };
 use slamkit_rs::{
-    CameraIntrinsics, FeatureMatcher, KeyframeConfig, KeyframeSelector, Map, MapPoint, OrbDetector,
-    PoseEstimator, Trajectory, Triangulator,
+    BundleAdjuster, CameraIntrinsics, FeatureMatcher, KeyframeConfig, KeyframeSelector, Map,
+    MapPoint, Observation, OrbDetector, PoseEstimator, Trajectory, Triangulator,
 };
 use std::fs::File;
 use std::io::Write;
@@ -101,6 +101,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_min_parallax(0.5)
         .with_max_reproj_error(8.0);
     let mut trajectory = Trajectory::new();
+
+    // Bundle adjustment for optimization
+    let bundle_adjuster = BundleAdjuster::new(intrinsics)
+        .with_max_iterations(10)
+        .with_lambda(1e-3);
+    let mut all_observations: Vec<Observation> = Vec::new();
+    let mut ba_runs = 0;
 
     // More aggressive keyframe selection for more points
     let kf_config = KeyframeConfig {
@@ -282,6 +289,85 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                         {
                                                             global_map
                                                                 .update_observations(&matches);
+
+                                                            // Collect observations for BA
+                                                            for (map_id, kp_idx) in matches.iter() {
+                                                                let pixel = kp.get(*kp_idx)?.pt();
+                                                                all_observations.push(
+                                                                    Observation::new(
+                                                                        keyframe_count - 1,
+                                                                        *map_id,
+                                                                        nalgebra::Point2::new(
+                                                                            pixel.x as f64,
+                                                                            pixel.y as f64,
+                                                                        ),
+                                                                    ),
+                                                                );
+                                                            }
+                                                        }
+
+                                                        // Run bundle adjustment every 5 keyframes
+                                                        if keyframe_count % 5 == 0
+                                                            && keyframe_count > 1
+                                                        {
+                                                            println!(
+                                                                "  Running Bundle Adjustment..."
+                                                            );
+                                                            let mut poses_vec: Vec<(
+                                                                nalgebra::Matrix3<f64>,
+                                                                nalgebra::Vector3<f64>,
+                                                            )> = trajectory
+                                                                .points()
+                                                                .iter()
+                                                                .map(|tp| {
+                                                                    (
+                                                                        nalgebra::Matrix3::identity(
+                                                                        ),
+                                                                        nalgebra::Vector3::new(
+                                                                            tp.position[0],
+                                                                            tp.position[1],
+                                                                            tp.position[2],
+                                                                        ),
+                                                                    )
+                                                                })
+                                                                .collect();
+
+                                                            let mut points_vec: Vec<
+                                                                nalgebra::Point3<f64>,
+                                                            > = global_map
+                                                                .points()
+                                                                .iter()
+                                                                .map(|p| p.position)
+                                                                .collect();
+
+                                                            if poses_vec.len() > 1
+                                                                && points_vec.len() > 3
+                                                                && all_observations.len() > 10
+                                                            {
+                                                                match bundle_adjuster
+                                                                    .local_bundle_adjustment(
+                                                                        &mut poses_vec,
+                                                                        &mut points_vec,
+                                                                        &all_observations,
+                                                                        5,
+                                                                    ) {
+                                                                    Ok(error) => {
+                                                                        ba_runs += 1;
+                                                                        println!(
+                                                                            "  BA: Optimized {} poses, {} points. Error: {:.4}",
+                                                                            poses_vec.len(),
+                                                                            points_vec.len(),
+                                                                            error
+                                                                        );
+                                                                    }
+                                                                    Err(e) => {
+                                                                        eprintln!(
+                                                                            "  BA failed: {}",
+                                                                            e
+                                                                        );
+                                                                    }
+                                                                }
+                                                            }
                                                         }
 
                                                         // Prune outliers periodically
@@ -418,6 +504,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         global_map.stable_points().len()
     );
     println!("Distance: {:.2}m", trajectory.total_distance());
+    println!("Bundle Adjustment runs: {}", ba_runs);
     println!("Time: {:.2}s", elapsed.as_secs_f64());
     println!("Avg FPS: {:.2}", frame_count as f64 / elapsed.as_secs_f64());
     println!("saved: point_cloud.ply, point_cloud.json, trajectory_output.json");

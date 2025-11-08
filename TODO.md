@@ -32,13 +32,16 @@
 - [x] Add point cloud export (PLY and JSON formats)
 - [x] Create point cloud example with triangulation
 - [x] Add real-time 3D visualization with Rerun
+- [x] Map management - track points, deduplicate, prune outliers
+- [x] Point reobservation - match against existing map points
+- [x] Bundle adjustment - local BA for refining poses and points
 
 ## Current Issues
 - [ ] Point cloud is sparse - only ~1000-2000 ORB features per frame
-- [ ] No map management - points are not reobserved, no global map consistency
 - [ ] This is VO, not SLAM - missing loop closure and global optimization
 - [ ] Scale drift - no absolute scale, accumulates error over time
-- [ ] No visualization - hard to see what's being mapped
+- [ ] Bundle Adjustment optimize function really needs an optimization, LU isn't the way to go, perhaps a port from COLMAP could benefit.
+
 
 ## SLAM Roadmap (Priority Order)
 
@@ -46,9 +49,11 @@
 - [x] Visual odometry (camera tracking)
 - [x] Sparse 3D reconstruction (triangulation)
 - [x] Real-time visualization with Rerun - see what's being mapped!
-- [ ] Map management - track which points exist, deduplicate, prune outliers
-- [ ] Point reobservation - match against existing map points, not just previous frame
-- [ ] Local mapping - maintain sliding window of recent keyframes and points
+- [x] Map management - track which points exist, deduplicate, prune outliers
+- [x] Point reobservation - match against existing map points, not just previous frame
+- [x] Local bundle adjustment - optimize sliding window of keyframes and points
+- [ ] Local mapping - maintain sliding window of recent keyframes and points with BA integration
+- [ ] Monocular Depth Estimation models loading using tch and it's integration.
 
 ### Dense/Semi-Dense Reconstruction
 - [ ] Increase point density
@@ -61,8 +66,8 @@
 ### Loop Closure & Global Optimization
 - [ ] Place recognition - DBoW2/DBoW3 for detecting revisited locations
 - [ ] Loop closure detection - geometric verification of loop candidates
-- [ ] Pose graph optimization - correct drift when loop is detected (g2o/Ceres)
-- [ ] Global bundle adjustment - optimize all poses and points together
+- [ ] Pose graph optimization - correct drift when loop is detected
+- [ ] Global bundle adjustment - optimize all poses and points together (expand current local BA)
 
 ### Robustness & Production
 - [ ] Relocalization - recover from tracking loss
@@ -119,6 +124,10 @@ cargo run --example point_cloud /path/to/video.mp4 -- --save-ply
 cargo run --example point_cloud --features rerun /path/to/video.mp4 -- --rerun --fx 718.856 --fy 718.856 --cx 607.1928 --cy 185.2157
 ```
 
+**Run bundle adjustment demo:**
+```bash
+cargo run --example bundle_adjustment
+```
 
 **Run tests:**
 ```bash

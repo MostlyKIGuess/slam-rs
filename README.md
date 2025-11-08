@@ -52,7 +52,7 @@ cargo run --example visualize_features /path/to/video.mp4
 
 - `feature`: ORB feature detection and matching
 - `odometry`: Camera intrinsics, pose estimation, trajectory tracking
-- `mapping`: Keyframe selection, 3D point triangulation, map points
+- `mapping`: Keyframe selection, 3D point triangulation, map points, bundle adjustment
 
 ## Examples
 
