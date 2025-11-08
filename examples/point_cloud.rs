@@ -5,7 +5,7 @@ use opencv::{
     videoio::{self, VideoCapture, VideoCaptureTrait},
 };
 use slamkit_rs::{
-    CameraIntrinsics, FeatureMatcher, KeyframeConfig, KeyframeSelector, MapPoint, OrbDetector,
+    CameraIntrinsics, FeatureMatcher, KeyframeConfig, KeyframeSelector, Map, MapPoint, OrbDetector,
     PoseEstimator, Trajectory, Triangulator,
 };
 use std::fs::File;
@@ -111,12 +111,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let mut keyframe_selector = KeyframeSelector::with_config(kf_config);
 
-    let mut all_map_points: Vec<MapPoint> = Vec::new();
+    // Global map for point management and reobservation
+    let mut global_map = Map::new(intrinsics);
 
     if !use_rerun {
         highgui::named_window("Video", highgui::WINDOW_AUTOSIZE)?;
         highgui::named_window("Matches", highgui::WINDOW_AUTOSIZE)?;
         highgui::named_window("Trajectory", highgui::WINDOW_AUTOSIZE)?;
+        highgui::named_window("3D Map", highgui::WINDOW_AUTOSIZE)?;
     }
 
     let mut frame = Mat::default();
@@ -254,9 +256,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                     &current_pose_rt,
                                                     &kf_points1,
                                                     &kf_points2,
+                                                    Some(&desc),
                                                 ) {
                                                     Ok(points) => {
-                                                        let num_points = points.len();
+                                                        let num_triangulated = points.len();
 
                                                         // Transform points to world frame
                                                         let world_points =
@@ -265,29 +268,54 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                                 &current_pose_rt,
                                                             );
 
-                                                        all_map_points.extend(world_points);
+                                                        // Add new points to global map
+                                                        global_map.add_points(world_points);
+
+                                                        // Try to match current frame against existing map
+                                                        if let Ok(matches) = global_map
+                                                            .find_matches(
+                                                                &kp,
+                                                                &desc,
+                                                                &current_pose_rt,
+                                                                &mut matcher,
+                                                            )
+                                                        {
+                                                            global_map
+                                                                .update_observations(&matches);
+                                                        }
+
+                                                        // Prune outliers periodically
+                                                        if keyframe_count % 10 == 0 {
+                                                            let removed =
+                                                                global_map.prune_outliers();
+                                                            if removed > 0 {
+                                                                println!(
+                                                                    "  Pruned {} outlier points",
+                                                                    removed
+                                                                );
+                                                            }
+                                                        }
 
                                                         #[cfg(feature = "rerun")]
                                                         if let Some(ref rec) = rec {
-                                                            // **FIX:** Log map and trajectory as STATIC data
-                                                            rec.log_static(
-                                                                "world/points",
-                                                                &log_map_points(&all_map_points)?,
-                                                            )?;
-                                                            rec.log_static(
-                                                                "world/trajectory",
-                                                                &log_trajectory(&trajectory)?,
-                                                            )?;
+                                                            let all_points: Vec<MapPoint> =
+                                                                global_map
+                                                                    .points()
+                                                                    .iter()
+                                                                    .map(|p| (*p).clone())
+                                                                    .collect();
+                                                            log_map_points(rec, &all_points)?;
+                                                            log_trajectory(rec, &trajectory)?;
                                                         }
 
                                                         println!(
-                                                            "Frame {:4} | KF {:3} | Matches: {:3} | Triangulated: {:4}/{:3} | Total 3D: {:6}",
+                                                            "Frame {:4} | KF {:3} | Matches: {:3} | Tri: {:4} | Map: {:6} ({:4} stable)",
                                                             frame_count,
                                                             keyframe_count,
                                                             good_kf_matches.len(),
-                                                            num_points,
-                                                            good_kf_matches.len(),
-                                                            all_map_points.len()
+                                                            num_triangulated,
+                                                            global_map.size(),
+                                                            global_map.stable_points().len()
                                                         );
                                                     }
                                                     Err(e) => {
@@ -335,7 +363,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "Frame: {} | Keyframes: {} | 3D Points: {}",
                 frame_count,
                 keyframe_count,
-                all_map_points.len()
+                global_map.size()
             );
             imgproc::put_text(
                 &mut display,
@@ -353,11 +381,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let traj_img = draw_trajectory(&trajectory, 600, 600)?;
             highgui::imshow("Trajectory", &traj_img)?;
 
+            // Draw 3D map (top-down view)
+            let all_points: Vec<MapPoint> =
+                global_map.points().iter().map(|p| (*p).clone()).collect();
+            let map_img = draw_3d_map(&all_points, &trajectory, 800, 800)?;
+            highgui::imshow("3D Map", &map_img)?;
+
             let key = highgui::wait_key(1)?;
             if key == 'q' as i32 || key == 27 {
                 break;
             } else if key == 's' as i32 {
-                save_point_cloud(&all_map_points)?;
+                let all_points: Vec<MapPoint> =
+                    global_map.points().iter().map(|p| (*p).clone()).collect();
+                save_point_cloud(&all_points)?;
                 save_trajectory(&trajectory)?;
             }
         }
@@ -369,12 +405,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let elapsed = start_time.elapsed();
 
-    save_point_cloud(&all_map_points)?;
+    // Save outputs
+    let all_points: Vec<MapPoint> = global_map.points().iter().map(|p| (*p).clone()).collect();
+    save_point_cloud(&all_points)?;
     save_trajectory(&trajectory)?;
 
     println!("Total frames: {}", frame_count);
     println!("Keyframes: {}", keyframe_count);
-    println!("3D map points: {}", all_map_points.len());
+    println!(
+        "3D map points: {} ({} stable)",
+        global_map.size(),
+        global_map.stable_points().len()
+    );
     println!("Distance: {:.2}m", trajectory.total_distance());
     println!("Time: {:.2}s", elapsed.as_secs_f64());
     println!("Avg FPS: {:.2}", frame_count as f64 / elapsed.as_secs_f64());
@@ -557,10 +599,12 @@ fn log_matches_image_to_rerun(
 }
 
 #[cfg(feature = "rerun")]
-fn log_map_points(points: &[MapPoint]) -> Result<rerun::Points3D, Box<dyn std::error::Error>> {
+fn log_map_points(
+    rec: &rerun::RecordingStream,
+    points: &[MapPoint],
+) -> Result<(), Box<dyn std::error::Error>> {
     if points.is_empty() {
-        // Return an empty Points3D entity
-        return Ok(rerun::Points3D::new(Vec::<[f32; 3]>::new()));
+        return Ok(());
     }
 
     let positions: Vec<[f32; 3]> = points
@@ -582,20 +626,24 @@ fn log_map_points(points: &[MapPoint]) -> Result<rerun::Points3D, Box<dyn std::e
         })
         .collect();
 
-    //  Return the entity instead of logging it
-    Ok(rerun::Points3D::new(positions)
-        .with_colors(colors)
-        .with_radii([0.02]))
+    rec.log(
+        "world/points",
+        &rerun::Points3D::new(positions)
+            .with_colors(colors)
+            .with_radii([0.02]),
+    )?;
+
+    Ok(())
 }
 
 #[cfg(feature = "rerun")]
 fn log_trajectory(
+    rec: &rerun::RecordingStream,
     trajectory: &Trajectory,
-) -> Result<rerun::LineStrips3D, Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let points = trajectory.points();
     if points.len() < 2 {
-        // Return an empty LineStrips3D entity
-        return Ok(rerun::LineStrips3D::new(Vec::<Vec<[f32; 3]>>::new()));
+        return Ok(());
     }
 
     let positions: Vec<[f32; 3]> = points
@@ -609,10 +657,14 @@ fn log_trajectory(
         })
         .collect();
 
-    // Return the entity instead of logging it
-    Ok(rerun::LineStrips3D::new([positions])
-        .with_colors([[0, 255, 0]]) // Green line
-        .with_radii([0.01]))
+    rec.log(
+        "world/trajectory",
+        &rerun::LineStrips3D::new([positions])
+            .with_colors([[0, 255, 0]])
+            .with_radii([0.01]),
+    )?;
+
+    Ok(())
 }
 
 #[cfg(feature = "rerun")]
@@ -767,4 +819,156 @@ fn depth_to_color_ply(depth: f32) -> (u8, u8, u8) {
         let t = (normalized - 0.5) * 2.0;
         ((255.0 * t) as u8, (255.0 * (1.0 - t)) as u8, 0)
     }
+}
+
+fn draw_3d_map(
+    points: &[MapPoint],
+    trajectory: &Trajectory,
+    width: i32,
+    height: i32,
+) -> opencv::Result<Mat> {
+    use opencv::core::{CV_8UC3, Scalar};
+
+    let mut img = Mat::new_rows_cols_with_default(
+        height,
+        width,
+        CV_8UC3,
+        Scalar::new(20.0, 20.0, 20.0, 0.0),
+    )?;
+
+    if points.is_empty() {
+        return Ok(img);
+    }
+
+    // Find bounds for all points and trajectory
+    let mut min_x = f64::MAX;
+    let mut max_x = f64::MIN;
+    let mut min_z = f64::MAX;
+    let mut max_z = f64::MIN;
+
+    for point in points {
+        min_x = min_x.min(point.position.x);
+        max_x = max_x.max(point.position.x);
+        min_z = min_z.min(point.position.z);
+        max_z = max_z.max(point.position.z);
+    }
+
+    let traj_points = trajectory.points();
+    for point in traj_points {
+        min_x = min_x.min(point.position[0]);
+        max_x = max_x.max(point.position[0]);
+        min_z = min_z.min(point.position[2]);
+        max_z = max_z.max(point.position[2]);
+    }
+
+    let range_x = (max_x - min_x).max(0.001);
+    let range_z = (max_z - min_z).max(0.001);
+    let scale = ((width as f64 * 0.85).min(height as f64 * 0.85)) / range_x.max(range_z);
+
+    let offset_x = width as f64 * 0.075;
+    let offset_y = height as f64 * 0.925;
+
+    for i in 0..10 {
+        let x = offset_x + (range_x / 10.0) * i as f64 * scale;
+        imgproc::line(
+            &mut img,
+            opencv::core::Point::new(x as i32, 0),
+            opencv::core::Point::new(x as i32, height),
+            Scalar::new(40.0, 40.0, 40.0, 0.0),
+            1,
+            imgproc::LINE_AA,
+            0,
+        )?;
+
+        let z = offset_y - (range_z / 10.0) * i as f64 * scale;
+        imgproc::line(
+            &mut img,
+            opencv::core::Point::new(0, z as i32),
+            opencv::core::Point::new(width, z as i32),
+            Scalar::new(40.0, 40.0, 40.0, 0.0),
+            1,
+            imgproc::LINE_AA,
+            0,
+        )?;
+    }
+
+    for point in points {
+        let x = ((point.position.x - min_x) * scale + offset_x) as i32;
+        let z = (offset_y - (point.position.z - min_z) * scale) as i32;
+
+        if x >= 0 && x < width && z >= 0 && z < height {
+            let color = if point.observations >= 3 {
+                Scalar::new(0.0, 255.0, 0.0, 0.0) // Green for stable
+            } else {
+                Scalar::new(100.0, 100.0, 100.0, 0.0) // Gray for unstable
+            };
+
+            imgproc::circle(
+                &mut img,
+                opencv::core::Point::new(x, z),
+                2,
+                color,
+                -1,
+                imgproc::LINE_AA,
+                0,
+            )?;
+        }
+    }
+
+    // Draw trajectory
+    for i in 1..traj_points.len() {
+        let p1 = &traj_points[i - 1];
+        let p2 = &traj_points[i];
+
+        let pt1 = opencv::core::Point::new(
+            ((p1.position[0] - min_x) * scale + offset_x) as i32,
+            (offset_y - (p1.position[2] - min_z) * scale) as i32,
+        );
+
+        let pt2 = opencv::core::Point::new(
+            ((p2.position[0] - min_x) * scale + offset_x) as i32,
+            (offset_y - (p2.position[2] - min_z) * scale) as i32,
+        );
+
+        imgproc::line(
+            &mut img,
+            pt1,
+            pt2,
+            Scalar::new(255.0, 255.0, 0.0, 0.0),
+            2,
+            imgproc::LINE_AA,
+            0,
+        )?;
+    }
+
+    // Draw current position
+    if let Some(last) = traj_points.last() {
+        let pt = opencv::core::Point::new(
+            ((last.position[0] - min_x) * scale + offset_x) as i32,
+            (offset_y - (last.position[2] - min_z) * scale) as i32,
+        );
+        imgproc::circle(
+            &mut img,
+            pt,
+            6,
+            Scalar::new(0.0, 0.0, 255.0, 0.0),
+            -1,
+            imgproc::LINE_AA,
+            0,
+        )?;
+    }
+
+    imgproc::put_text(
+        &mut img,
+        "Green: Stable points | Gray: New points | Yellow: Path | Red: Current",
+        opencv::core::Point::new(10, height - 10),
+        imgproc::FONT_HERSHEY_SIMPLEX,
+        0.4,
+        Scalar::new(255.0, 255.0, 255.0, 0.0),
+        1,
+        imgproc::LINE_8,
+        false,
+    )?;
+
+    Ok(img)
 }

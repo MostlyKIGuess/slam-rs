@@ -95,6 +95,7 @@ impl Triangulator {
         pose2: &(na::Matrix3<f64>, na::Vector3<f64>),
         points1: &Vector<Point2f>,
         points2: &Vector<Point2f>,
+        descriptors: Option<&Mat>,
     ) -> Result<Vec<MapPoint>, Box<dyn std::error::Error>> {
         if points1.len() != points2.len() {
             return Err("Point arrays must have the same length".into());
@@ -138,8 +139,19 @@ impl Triangulator {
 
             // TODO: Check parallax angle
             // (For now, skipping this check for simplicity)
+            // Create map point with optional descriptor
+            let mut map_point = MapPoint::new(point_3d, i as usize);
+            if let Some(desc_mat) = descriptors {
+                if i < desc_mat.rows() {
+                    let mut desc_vec = Vec::new();
+                    for j in 0..desc_mat.cols() {
+                        desc_vec.push(*desc_mat.at_2d::<u8>(i, j)?);
+                    }
+                    map_point.descriptor = Some(desc_vec);
+                }
+            }
 
-            map_points.push(MapPoint::new(point_3d, i as usize));
+            map_points.push(map_point);
         }
 
         Ok(map_points)
@@ -245,7 +257,7 @@ mod tests {
         let points1 = Vector::new();
         let points2 = Vector::new();
 
-        let result = triangulator.triangulate(&pose1, &pose2, &points1, &points2);
+        let result = triangulator.triangulate(&pose1, &pose2, &points1, &points2, None);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 0);
     }
@@ -263,7 +275,7 @@ mod tests {
 
         let points2 = Vector::new();
 
-        let result = triangulator.triangulate(&pose1, &pose2, &points1, &points2);
+        let result = triangulator.triangulate(&pose1, &pose2, &points1, &points2, None);
         assert!(result.is_err());
     }
 
@@ -317,7 +329,7 @@ mod tests {
         points2.push(project_point(&point_3d_2, &pose2.0, &pose2.1));
 
         // Triangulate
-        let result = triangulator.triangulate(&pose1, &pose2, &points1, &points2);
+        let result = triangulator.triangulate(&pose1, &pose2, &points1, &points2, None);
         if let Err(e) = &result {
             eprintln!("Triangulation error: {}", e);
         }
