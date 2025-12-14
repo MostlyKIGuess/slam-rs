@@ -145,14 +145,13 @@ impl BundleAdjuster {
         );
 
         let mut j_pose = na::Matrix2x6::zeros();
-        // Rotation part: del pixel/del w = del pixel/del p_cam * del p_cam/del w
+        // Rotation part: del pixel / del omega = del pixel / del p_cam * del p_cam / del omega
+        // For left perturbation: del p_cam / del omega = -[R*p_world]× = -point_cam_cross
         j_pose
             .fixed_view_mut::<2, 3>(0, 0)
             .copy_from(&(j_proj * (-point_cam_cross)));
-        // Translation part: del pixel/del t = del pixel/del p_cam * del p_cam/del t
-        j_pose
-            .fixed_view_mut::<2, 3>(0, 3)
-            .copy_from(&(j_proj * (-point_cam_cross)));
+        // Translation part: del pixel / del t = del pixel / del p_cam * del p_cam / del t = j_proj * I = j_proj
+        j_pose.fixed_view_mut::<2, 3>(0, 3).copy_from(&j_proj);
 
         Some((j_pose, j_point))
     }
