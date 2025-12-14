@@ -16,6 +16,7 @@ serde = "1.0.228"
 serde_json = "1.0.145"
 rerun = { version = "0.26.2", optional = true }
 clap = { version = "4.5.51", features = ["derive"] }
+tch = { version = "0.22.0", optional = true }
 approx = "0.5.1"
 
 [dev-dependencies]
@@ -24,3 +25,4 @@ rand = "0.8"
 [features]
 default = []
 rerun = ["dep:rerun"]
+depth = ["dep:tch"]
