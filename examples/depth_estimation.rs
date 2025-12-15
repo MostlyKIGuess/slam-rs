@@ -1,6 +1,6 @@
 use clap::Parser;
 use opencv::{
-    core::{Mat, Vector},
+    core::{Mat, Scalar, Vector},
     highgui, imgcodecs, imgproc,
     prelude::*,
     videoio::{self, VideoCapture, VideoCaptureTrait},
