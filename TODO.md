@@ -52,8 +52,8 @@
 - [x] Map management - track which points exist, deduplicate, prune outliers
 - [x] Point reobservation - match against existing map points, not just previous frame
 - [x] Local bundle adjustment - optimize sliding window of keyframes and points
+- [x] Monocular Depth Estimation - MonoDepth2 integration with tch-rs
 - [ ] Local mapping - maintain sliding window of recent keyframes and points with BA integration
-- [ ] Monocular Depth Estimation models loading using tch and it's integration.
 
 ### Dense/Semi-Dense Reconstruction
 - [ ] Increase point density
@@ -128,6 +128,20 @@ cargo run --example point_cloud --features rerun /path/to/video.mp4 -- --rerun -
 ```bash
 cargo run --example bundle_adjustment
 ```
+
+**Run depth estimation:**
+```bash
+# Single image
+cargo run --example depth_estimation --features depth -- test.jpg --encoder weights/encoder.pt --decoder weights/depth.pt
+
+# Video with Rerun visualization
+cargo run --example depth_estimation --features depth,rerun -- test.mp4 --cuda --rerun
+
+# Video with OpenCV (no Rerun)
+cargo run --example depth_estimation --features depth -- test.mp4 --cuda --save
+```
+
+See `docs/Deep-Learning.md` for model installation and setup instructions.
 
 **Run tests:**
 ```bash

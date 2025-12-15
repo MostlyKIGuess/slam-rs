@@ -1,0 +1,6 @@
+*.pt
+*.pth
+*.onnx
+*.pb
+
+monodepth2
